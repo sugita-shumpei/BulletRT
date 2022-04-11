@@ -1,0 +1,9 @@
+[submodule "Ext/glfw"]
+	path = Ext/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "Ext/SPIRV-Cross"]
+	path = Ext/SPIRV-Cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git
+[submodule "Ext/rttr"]
+	path = Ext/rttr
+	url = https://github.com/rttrorg/rttr.git
