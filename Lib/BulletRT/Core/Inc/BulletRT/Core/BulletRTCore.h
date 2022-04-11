@@ -1001,6 +1001,7 @@ namespace BulletRT
             std::optional<vk::MemoryAllocateFlagsInfo>     m_MemoryAllocateFlagsInfo;
             std::optional<vk::MemoryDedicatedAllocateInfo> m_MemoryDedicatedAllocateInfo;
         };
+
         class VulkanMemoryBuffer {
         public:
             static auto Bind(const VulkanBuffer* buffer, const VulkanDeviceMemory* memory, vk::DeviceSize memoryOffset = 0) -> std::unique_ptr<VulkanMemoryBuffer>;
@@ -1019,6 +1020,7 @@ namespace BulletRT
             auto GetMemoryAllocationSize()const noexcept -> vk::DeviceSize { return m_Memory->GetAllocationSize();}
             auto GetDeviceAddress()const noexcept -> std::optional<vk::DeviceAddress> { return m_DeviceAddress;}
         private:
+            static bool SupportDeviceAddress(const VulkanBuffer* buffer, const VulkanDeviceMemory* memory)noexcept;
             VulkanMemoryBuffer()noexcept;
         private:
             const VulkanBuffer      *     m_Buffer;

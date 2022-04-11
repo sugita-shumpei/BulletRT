@@ -1,6 +1,9 @@
 #include <BulletRT/Core/BulletRTCore.h>
 #include <iostream>
 #include <vector>
+
+using namespace BulletRT::Core;
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 BulletRT::Core::VulkanDeviceFeaturesSet::VulkanDeviceFeaturesSet(const VulkanDeviceFeaturesSet& featureSet) noexcept
 {
@@ -711,11 +714,8 @@ auto BulletRT::Core::VulkanMemoryBuffer::Bind(const VulkanBuffer* buffer, const 
     memoryBuffer->m_Buffer        = buffer;
     memoryBuffer->m_Memory        = memory;
     memoryBuffer->m_MemoryOffset  = memoryOffset;
-    auto memoryAllocationFlagsInfo= memory->GetMemoryAllocateFlagsInfo();
-    if (memoryAllocationFlagsInfo.has_value()){
-        if (memoryAllocationFlagsInfo.value().flags&vk::MemoryAllocateFlagBits::eDeviceAddress){
-            memoryBuffer->m_DeviceAddress = buffer->GetDevice()->GetDeviceVk().getBufferAddress(vk::BufferDeviceAddressInfo().setBuffer(buffer->GetBufferVk()));
-        }
+    if (SupportDeviceAddress(buffer,memory)){
+        memoryBuffer->m_DeviceAddress = buffer->GetDevice()->GetDeviceVk().getBufferAddress(vk::BufferDeviceAddressInfo().setBuffer(buffer->GetBufferVk()));
     }
     return std::unique_ptr<VulkanMemoryBuffer>(memoryBuffer);
 }
@@ -732,6 +732,40 @@ auto BulletRT::Core::VulkanMemoryBuffer::Map(void** pPData, vk::DeviceSize size,
 void BulletRT::Core::VulkanMemoryBuffer::Unmap() const
 {
     m_Memory->Unmap();
+}
+
+bool BulletRT::Core::VulkanMemoryBuffer::SupportDeviceAddress(const VulkanBuffer* buffer, const VulkanDeviceMemory* memory) noexcept
+{
+    bool supportDeviceAddress = false;
+    if (buffer->GetDevice()->SupportExtension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)) {
+        if (auto features = buffer->GetDevice()->QueryFeatures<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>()) {
+            if (features.value().bufferDeviceAddress) {
+                supportDeviceAddress = true;
+            }
+        }
+    }
+    else {
+        if (auto features = buffer->GetDevice()->QueryFeatures<vk::PhysicalDeviceVulkan12Features>()) {
+            if (features.value().bufferDeviceAddress) {
+                supportDeviceAddress = true;
+            }
+        }
+    }
+    if (!supportDeviceAddress) {
+        return false;
+    }
+    if (!(buffer->GetUsage() & vk::BufferUsageFlagBits::eShaderDeviceAddress)) {
+        return false;
+    }
+    if (auto& flagsInfo = memory->GetMemoryAllocateFlagsInfo()) {
+        if (!(flagsInfo.value().flags & vk::MemoryAllocateFlagBits::eDeviceAddress)) {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+    return true;
 }
 
 BulletRT::Core::VulkanMemoryBuffer::VulkanMemoryBuffer() noexcept
@@ -800,10 +834,6 @@ BulletRT::Core::VulkanFence::VulkanFence() noexcept
     m_Fence = {};
     m_Device = nullptr;
 }
-
-
-using namespace BulletRT::Core;
-
 auto VulkanFence::Wait(uint64_t timeout) const noexcept -> vk::Result {
     vk::Fence fence = m_Fence.get();
     return m_Device->GetDeviceVk().waitForFences(1,&fence,VK_TRUE,timeout);
