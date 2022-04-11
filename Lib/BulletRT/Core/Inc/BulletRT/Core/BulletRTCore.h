@@ -592,19 +592,6 @@ namespace BulletRT
             auto GetExtensionSet()const noexcept -> const std::unordered_set<std::string>& { return m_ExtNameSet; }
             //Features
             template<typename VulkanFeaturesType>
-            auto ResetFeatures()noexcept -> VulkanDeviceBuilder&
-            {
-                if constexpr (std::is_same_v<vk::PhysicalDeviceFeatures2, VulkanFeaturesType>)
-                {
-                    auto features      = m_PhysicalDevice.getFeatures2<vk::PhysicalDeviceFeatures2>();
-                    return SetFeatures(features);
-                }
-                else {
-                    auto featuresChain = m_PhysicalDevice.getFeatures2<vk::PhysicalDeviceFeatures2, VulkanFeaturesType>();
-                    return SetFeatures(featuresChain.get<VulkanFeaturesType>());
-                }
-            }
-            template<typename VulkanFeaturesType>
             auto SetFeatures(const VulkanFeaturesType& features)noexcept -> VulkanDeviceBuilder&
             {
                 if (
@@ -615,12 +602,32 @@ namespace BulletRT
                 return *this;
             }
             auto GetFeaturesSet()const noexcept -> const VulkanDeviceFeaturesSet& { return m_FeaturesSet; }
+            template<typename VulkanFeaturesType>
+            auto ResetFeatures()noexcept -> VulkanDeviceBuilder&
+            {
+                if constexpr (std::is_same_v<vk::PhysicalDeviceFeatures2, VulkanFeaturesType>)
+                {
+                    auto features      = m_PhysicalDevice.getFeatures2();
+                    return SetFeatures(features);
+                }
+                else {
+                    auto featuresChain = m_PhysicalDevice.getFeatures2<vk::PhysicalDeviceFeatures2, VulkanFeaturesType>();
+                    auto features = featuresChain.template get<VulkanFeaturesType>();
+                    return SetFeatures(features);
+                }
+            }
             //QueueFamilyProperties
             auto SetQueueFamily(const VulkanQueueFamilyBuilder& queueFamily)noexcept -> VulkanDeviceBuilder& {
                 if (m_QueueFamilyProperties.size() > queueFamily.GetQueueFamilyIndex()) {
                     if (m_QueueFamilyProperties[queueFamily.GetQueueFamilyIndex()].queueCount >= queueFamily.GetQueueCount() && queueFamily.GetQueueCount() > 0) {
                         m_QueueFamilyMap[queueFamily.GetQueueFamilyIndex()] = queueFamily;
                     }
+                }
+                return *this;
+            }
+            auto SetQueueFamilies(const std::vector<VulkanQueueFamilyBuilder>& queueFamilies)noexcept -> VulkanDeviceBuilder& {
+                for (auto& queueFamily:queueFamilies){
+                    SetQueueFamily(queueFamily);
                 }
                 return *this;
             }
@@ -646,6 +653,7 @@ namespace BulletRT
             static auto New(const VulkanDeviceBuilder& builder)noexcept -> std::unique_ptr<VulkanDevice>;
             virtual ~VulkanDevice()noexcept;
 
+            auto NewFence(bool isSignaled = false)->std::unique_ptr<VulkanFence>;
             auto WaitForFences(const std::vector<const VulkanFence*>& fences, uint64_t timeOut = UINT64_MAX, VkBool32 waitForAll = VK_FALSE)->vk::Result;
 
             auto GetInstance()const noexcept -> const VulkanInstance* { return m_Instance; }
@@ -670,7 +678,7 @@ namespace BulletRT
             template<typename VulkanFeatureType>
             auto QueryFeatures()const noexcept -> std::optional<VulkanFeatureType>
             {
-                return m_EnabledFeaturesSet.Read();
+                return m_EnabledFeaturesSet.Read<VulkanFeatureType>();
             }
         private:
             VulkanDevice()noexcept;
@@ -688,6 +696,8 @@ namespace BulletRT
             static auto New(const VulkanDevice* device, bool isSignaled = false)->std::unique_ptr<VulkanFence>;
             virtual ~VulkanFence()noexcept;
 
+            auto Wait(uint64_t timeout)const noexcept -> vk::Result;
+            auto QueryStatus()const noexcept -> vk::Result;
             auto GetFenceVk() const noexcept -> vk::Fence { return m_Fence.get(); }
             auto GetDevice()  const noexcept -> const VulkanDevice* { return m_Device; }
             auto GetDeviceVk()const noexcept -> vk::Device { return m_Device->GetDeviceVk(); }
@@ -967,6 +977,7 @@ namespace BulletRT
             static auto New(const VulkanDevice* device, const VulkanDeviceMemoryBuilder& builder)->std::unique_ptr<VulkanDeviceMemory>;
             virtual ~VulkanDeviceMemory()noexcept;
 
+            auto   Map(void** pPData, vk::MemoryMapFlags flags = {})const->vk::Result;
             auto   Map(void** pPData, vk::DeviceSize size, vk::DeviceSize offset = 0, vk::MemoryMapFlags flags = {})const->vk::Result;
             void Unmap()const;
 
@@ -995,6 +1006,7 @@ namespace BulletRT
             static auto Bind(const VulkanBuffer* buffer, const VulkanDeviceMemory* memory, vk::DeviceSize memoryOffset = 0) -> std::unique_ptr<VulkanMemoryBuffer>;
             virtual ~VulkanMemoryBuffer()noexcept;
 
+            auto   Map(void** pPData, vk::MemoryMapFlags flags = {})const->vk::Result;
             auto   Map(void** pPData, vk::DeviceSize size, vk::DeviceSize offset = 0, vk::MemoryMapFlags flags = {})const->vk::Result;
             void Unmap()const;
 

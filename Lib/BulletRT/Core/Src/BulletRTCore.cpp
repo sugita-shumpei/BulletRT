@@ -1,5 +1,6 @@
 #include <BulletRT/Core/BulletRTCore.h>
 #include <iostream>
+#include <vector>
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 BulletRT::Core::VulkanDeviceFeaturesSet::VulkanDeviceFeaturesSet(const VulkanDeviceFeaturesSet& featureSet) noexcept
 {
@@ -301,9 +302,15 @@ BulletRT::Core::VulkanDevice::~VulkanDevice() noexcept
 
 auto BulletRT::Core::VulkanDevice::WaitForFences(const std::vector<const VulkanFence*>& fences, uint64_t timeOut, VkBool32 waitForAll) -> vk::Result
 {
-    auto fences = std::vector<vk::Fence>();
-
-    return m_LogigalDevice->waitForFences();
+    auto fencesVk = std::vector<vk::Fence>();
+    fencesVk.reserve(fences.size());
+    for (auto& fence:fences){
+        if (fence){
+            fencesVk.push_back(fence->GetFenceVk());
+        }
+    }
+    
+    return m_LogigalDevice->waitForFences(fencesVk.size(),fencesVk.data(),waitForAll,timeOut);
 }
 
 auto BulletRT::Core::VulkanDevice::EnumerateQueues(uint32_t queueFamilyIndex) const -> std::vector<VulkanQueue>
@@ -472,6 +479,11 @@ auto BulletRT::Core::VulkanDeviceMemory::New(const VulkanDevice* device, const V
     }
     if (enableDeviceGroupKhr) {
         if (memoryAllocateFlagsInfo) {
+            if (!device->SupportExtension(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)&&
+                !device->SupportExtension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)&&
+                 physicalDeviceProperties.apiVersion < VK_API_VERSION_1_3){
+                memoryAllocateFlagsInfo.value().flags &= ~vk::MemoryAllocateFlagBits::eDeviceAddress;
+            }
             memoryAllocateFlagsInfo.value().pNext = pHead;
             pHead = &memoryAllocateFlagsInfo.value();
         }
@@ -518,6 +530,11 @@ BulletRT::Core::VulkanDeviceMemory:: VulkanDeviceMemory() noexcept
 BulletRT::Core::VulkanDeviceMemory::~VulkanDeviceMemory() noexcept
 {
     m_DeviceMemory.reset();
+}
+
+auto BulletRT::Core::VulkanDeviceMemory::Map(void** pPData, vk::MemoryMapFlags flags) const -> vk::Result
+{
+    return m_Device->GetDeviceVk().mapMemory(m_DeviceMemory.get(),0, m_AllocationSize,flags,pPData);
 }
 
 auto BulletRT::Core::VulkanDeviceMemory::Map(void** pPData, vk::DeviceSize size, vk::DeviceSize offset, vk::MemoryMapFlags flags) const -> vk::Result
@@ -694,7 +711,12 @@ auto BulletRT::Core::VulkanMemoryBuffer::Bind(const VulkanBuffer* buffer, const 
     memoryBuffer->m_Buffer        = buffer;
     memoryBuffer->m_Memory        = memory;
     memoryBuffer->m_MemoryOffset  = memoryOffset;
-    memoryBuffer->m_DeviceAddress = buffer->GetDevice()->GetDeviceVk().getBufferAddress(vk::BufferDeviceAddressInfo().setBuffer(buffer->GetBufferVk()));
+    auto memoryAllocationFlagsInfo= memory->GetMemoryAllocateFlagsInfo();
+    if (memoryAllocationFlagsInfo.has_value()){
+        if (memoryAllocationFlagsInfo.value().flags&vk::MemoryAllocateFlagBits::eDeviceAddress){
+            memoryBuffer->m_DeviceAddress = buffer->GetDevice()->GetDeviceVk().getBufferAddress(vk::BufferDeviceAddressInfo().setBuffer(buffer->GetBufferVk()));
+        }
+    }
     return std::unique_ptr<VulkanMemoryBuffer>(memoryBuffer);
 }
 
@@ -719,6 +741,11 @@ BulletRT::Core::VulkanMemoryBuffer::VulkanMemoryBuffer() noexcept
     m_MemoryOffset = 0;
     m_DeviceAddress = std::nullopt;
 }
+
+auto BulletRT::Core::VulkanMemoryBuffer::Map(void **pPData, vk::MemoryMapFlags flags) const -> vk::Result { 
+    return m_Memory->Map(pPData,m_Buffer->GetSize(),m_MemoryOffset,flags);
+}
+
 
 auto BulletRT::Core::VulkanMemoryImage::Bind(const VulkanImage* image, const VulkanDeviceMemory* memory, vk::DeviceSize memoryOffset) -> std::unique_ptr<VulkanMemoryImage>
 {
@@ -774,3 +801,20 @@ BulletRT::Core::VulkanFence::VulkanFence() noexcept
     m_Device = nullptr;
 }
 
+
+using namespace BulletRT::Core;
+
+auto VulkanFence::Wait(uint64_t timeout) const noexcept -> vk::Result {
+    vk::Fence fence = m_Fence.get();
+    return m_Device->GetDeviceVk().waitForFences(1,&fence,VK_TRUE,timeout);
+}
+
+
+auto VulkanFence::QueryStatus() const noexcept -> vk::Result { 
+    return m_Device->GetDeviceVk().getFenceStatus(m_Fence.get());
+}
+
+
+auto VulkanDevice::NewFence(bool isSignaled) -> std::unique_ptr<VulkanFence> { 
+    return VulkanFence::New(this,isSignaled);
+}
