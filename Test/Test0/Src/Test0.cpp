@@ -1,6 +1,67 @@
 #include <Test0.h>
 int main(int argc, const char **argv)
 {
+    
+    auto graphicsPipelineBuilder = BulletRT::Core::VulkanGraphicsPipelineBuilder()
+        .AddStage(BulletRT::Core::VulkanPipelineShaderStageDesc().SetStage(vk::ShaderStageFlagBits::eVertex  ).SetModule(nullptr).SetName("main"))
+        .AddStage(BulletRT::Core::VulkanPipelineShaderStageDesc().SetStage(vk::ShaderStageFlagBits::eFragment).SetModule(nullptr).SetName("main"))
+        .SetVertexInputState(BulletRT::Core::VulkanPipelineVertexInputStateDesc()
+        .SetVertexBindingDescriptions({
+            vk::VertexInputBindingDescription().setBinding(0).setStride(sizeof(float)*3).setInputRate(vk::VertexInputRate::eVertex)
+        }))
+        .SetInputAssemblyState(vk::PipelineInputAssemblyStateCreateInfo()
+        .setTopology(vk::PrimitiveTopology::eTriangleList)
+        .setPrimitiveRestartEnable(VK_FALSE))
+        .SetViewportState(
+            BulletRT::Core::VulkanPipelineViewportStateDesc()
+            .SetViewportCount(1)
+            .SetViewport(0, vk::Viewport().setX(0).setY(0).setWidth(1024).setHeight(1024).setMinDepth(0.0f).setMaxDepth(1.0f))
+            .SetScissorCount(1)
+            .SetScissor(0, vk::Rect2D().setOffset({0,0}).setExtent(vk::Extent2D().setWidth(1024).setHeight(1024)))
+        )
+        .SetRasterizationState(
+            BulletRT::Core::VulkanPipelineRasterizationStateDesc()
+            .SetDepthClampEnable(VK_FALSE).SetRasterizerDiscardEnable(VK_FALSE)
+            .SetPolygonMode(vk::PolygonMode::eFill)
+            .SetCullMode(vk::CullModeFlagBits::eBack)
+            .SetFrontFace(vk::FrontFace::eClockwise)
+            .SetLineWidth(1.0f)
+            .SetDepthBiasEnable(VK_FALSE)
+            .SetDepthBiasConstantFactor(0.0f)
+            .SetDepthBiasClamp(0.0f)
+            .SetDepthBiasSlopeFactor(0.0f)
+        )
+        .SetMultiSampleState(
+            BulletRT::Core::VulkanPipelineMultiSampleStateDesc()
+            .SetSampleShadingEnable(VK_FALSE)
+            .SetRasterizationSamples(vk::SampleCountFlagBits::e1)
+            .SetMinSampleShading(1.0f)
+            .SetAlphaToCoverageEnable(VK_FALSE)
+            .SetAlphaToOneEnable(VK_FALSE)
+        )
+        .SetColorBlendState(
+            BulletRT::Core::VulkanPipelineColorBlendStateDesc()
+            .SetLogicOpEnable(VK_FALSE)
+            .SetAttachmentCount(1)
+            .SetAttachment(0, vk::PipelineColorBlendAttachmentState()
+            .setColorWriteMask(vk::ColorComponentFlagBits::eR|vk::ColorComponentFlagBits::eG|vk::ColorComponentFlagBits::eB|vk::ColorComponentFlagBits::eA)
+            .setBlendEnable(VK_FALSE)
+            .setSrcColorBlendFactor(vk::BlendFactor::eOne)
+            .setDstColorBlendFactor(vk::BlendFactor::eZero)
+            .setColorBlendOp(vk::BlendOp::eAdd)
+            .setSrcAlphaBlendFactor(vk::BlendFactor::eOne)
+            .setDstAlphaBlendFactor(vk::BlendFactor::eZero)
+            .setAlphaBlendOp(vk::BlendOp::eAdd))
+            .SetBlendConstant(0, 0.0f)
+            .SetBlendConstant(1, 0.0f)
+            .SetBlendConstant(2, 0.0f)
+            .SetBlendConstant(3, 0.0f)
+        )
+        .SetRenderPass(nullptr)
+        .SetLayout(nullptr)
+        .SetSubpass(0)
+        .SetBasePipelineHandle(nullptr);
+    
     auto app = Test0Application();
     return app.Run(argc, argv);
 }
@@ -15,6 +76,9 @@ void Test0Application::InitInstance()
         .SetEngineVersion(VK_MAKE_API_VERSION(0, 1, 0, 0))
         .SetExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
         .SetExtension(VK_KHR_SURFACE_EXTENSION_NAME)
+#ifdef __APPLE__
+        .SetExtension("VK_EXT_metal_surface")
+#endif
 #ifdef WIN32
         .SetExtension("VK_KHR_win32_surface")
 #endif
@@ -42,7 +106,7 @@ void Test0Application::InitDevice()
     m_VulkanMemoryProperties = deviceBuilder.GetPhysicalDevice().getMemoryProperties();
 
     auto gQueFamIndices = FindQueueFamilyIndices(m_VulkanQueueFamilyProperties, vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eTransfer);
-    auto cQueFamIndices = FindQueueFamilyIndices(m_VulkanQueueFamilyProperties, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics);
+    auto cQueFamIndices = FindQueueFamilyIndices(m_VulkanQueueFamilyProperties, vk::QueueFlagBits::eCompute  | vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics);
     auto tQueFamIndices = FindQueueFamilyIndices(m_VulkanQueueFamilyProperties, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute);
 
     auto queueFamilyBuilders = std::vector<BulletRT::Core::VulkanQueueFamily::Builder>();
@@ -71,6 +135,7 @@ void Test0Application::InitDevice()
             .SetExtension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
             .SetExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME)
             .SetExtension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME)
+            .SetExtension(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME)
             .ResetFeatures<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>()
             .ResetFeatures<vk::PhysicalDeviceDescriptorIndexingFeatures>()
             .ResetFeatures<vk::PhysicalDeviceTimelineSemaphoreFeatures>();
@@ -279,4 +344,25 @@ void Test0Application::InitMesh()
     }
     gFence.reset();
     copyCommand.reset();
+}
+
+void Test0Application::InitRenderPass()
+{
+    m_VulkanRenderPass = BulletRT::Core::VulkanRenderPass::Builder()
+        .SetAttachmentCount(1).SetAttachment(0,vk::AttachmentDescription()
+        .setFormat(vk::Format::eB8G8R8A8Unorm)
+        .setSamples(vk::SampleCountFlagBits::e1)
+        .setInitialLayout(vk::ImageLayout::eUndefined)
+        .setFinalLayout(vk::ImageLayout::ePresentSrcKHR)
+        .setLoadOp(vk::AttachmentLoadOp::eClear)
+        .setStoreOp(vk::AttachmentStoreOp::eStore)
+        .setStencilLoadOp(vk::AttachmentLoadOp::eDontCare)
+        .setStencilStoreOp(vk::AttachmentStoreOp::eDontCare))
+        .SetSubpassCount(1).SetSubpass(0, BulletRT::Core::VulkanSubpassDesc()
+        .SetPipelineBindPoint(vk::PipelineBindPoint::eGraphics)
+        .SetColorAttachmentCount(1).SetColorAttachment(0,vk::AttachmentReference()
+        .setAttachment(0)
+        .setLayout(vk::ImageLayout::eColorAttachmentOptimal)))
+        .Build(m_VulkanDevice.get());
+    
 }

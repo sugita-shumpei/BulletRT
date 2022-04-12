@@ -1,4 +1,5 @@
 #include <BulletRT/Utils/VulkanStaging.h>
+#include <cmath>
 static auto FindMemoryTypeIndices(const vk::PhysicalDeviceMemoryProperties& memoryProps,
     uint32_t memoryTypeBits,
     vk::MemoryPropertyFlags requiredFlags,
@@ -89,8 +90,8 @@ auto BulletRT::Utils::VulkanStaging::Upload(const std::vector<VulkanStagingUploa
     for (auto& desc : descs) {
         if ((desc.offset <= GetSize())&&( desc.offset + desc.sizeInBytes <= GetSize())) {
             executeDescs.push_back(desc);
-            minRange = std::min(minRange, desc.offset);
-            maxRange = std::max(maxRange, desc.offset + desc.sizeInBytes);
+            minRange = std::min<uint64_t>(minRange, desc.offset);
+            maxRange = std::max<uint64_t>(maxRange, desc.offset + desc.sizeInBytes);
         }
     }
     size_t sizeInBytes = maxRange - minRange;

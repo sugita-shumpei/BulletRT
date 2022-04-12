@@ -2,6 +2,7 @@
 #define TEST0_TEST0_H
 #include <BulletRT/Core/BulletRTCore.h>
 #include <BulletRT/Utils/VulkanStaging.h>
+#include <GLFW/glfw3.h>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -37,9 +38,11 @@ private:
             InitStaging(128 * 1024 * 1024);
         }
         InitMesh();
+        InitRenderPass();
     }
     void Terminate()
     {
+        FreeRenderPass();
         FreeMesh();
         FreeStaging();
         FreeCommandPool();
@@ -84,6 +87,10 @@ private:
         m_VulkanMeshMemories.clear();
         m_VulkanVertMemoryBuffer.reset();
         m_VulkanIndxMemoryBuffer.reset();
+    }
+    void InitRenderPass();
+    void FreeRenderPass(){
+        m_VulkanRenderPass.reset();
     }
 private:
     static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsUserCallback(
@@ -158,13 +165,18 @@ private:
     std::optional<BulletRT::Core::VulkanQueueFamily>   m_VulkanTQueueFamily = std::nullopt;
     std::unique_ptr<BulletRT::Core::VulkanCommandPool> m_VulkanTCommandPool = nullptr;
     
-    std::unique_ptr<BulletRT::Utils::VulkanStaging>    m_VulkanStaging             = nullptr;
-    size_t                                             m_VulkanStagingMemoryOffset = 0;
+    std::unique_ptr<BulletRT::Utils::VulkanStaging> m_VulkanStaging             = nullptr;
+    size_t                                          m_VulkanStagingMemoryOffset = 0;
 
     std::vector<std::unique_ptr<BulletRT::Core::VulkanDeviceMemory>> m_VulkanMeshMemories     = {};
     std::unique_ptr<BulletRT::Core::VulkanBuffer>                    m_VulkanVertMeshBuffer   = nullptr;
     std::unique_ptr<BulletRT::Core::VulkanMemoryBuffer>              m_VulkanVertMemoryBuffer = nullptr;
     std::unique_ptr<BulletRT::Core::VulkanBuffer>                    m_VulkanIndxMeshBuffer   = nullptr;
     std::unique_ptr<BulletRT::Core::VulkanMemoryBuffer>              m_VulkanIndxMemoryBuffer = nullptr;
+    std::unique_ptr<BulletRT::Core::VulkanRenderPass>                m_VulkanRenderPass       = nullptr;
+    
+    GLFWwindow* m_Window = nullptr;
+    int m_FbWidth  = 0;
+    int m_FbHeight = 0;
 };
 #endif
